@@ -109,14 +109,18 @@ def make_pre_report(api, fixture, cfg):
     ]
     return "\n".join(lines), predictions
 
+
 def make_post_report(api, fixture, cfg, pre_predictions=None):
     fid = fixture["fixture"]["id"]
     home, away, league = fixture_parts(fixture)
     goals = fixture.get("goals", {})
     status = fixture.get("fixture", {}).get("status", {})
-    events = api.events(fid)
-    stats = api.statistics(fid)
-    lineups = api.lineups(fid)
+
+    # These data sources are optional: one failure must not stop the report.
+    events = optional_api_data(api, "events", fid, "events")
+    stats = optional_api_data(api, "statistics", fid, "statistics")
+    lineups = optional_api_data(api, "lineups", fid, "lineups")
+
     lines = [
         f"# Post-match report: {home.get('name')} vs {away.get('name')}",
         "",
@@ -128,6 +132,7 @@ def make_post_report(api, fixture, cfg, pre_predictions=None):
         "",
         "## Match narrative",
     ]
+
     if events:
         for e in events:
             elapsed = e.get("time", {}).get("elapsed", "?")
@@ -138,33 +143,73 @@ def make_post_report(api, fixture, cfg, pre_predictions=None):
             detail = e.get("detail") or e.get("type") or "Event"
             assist = e.get("assist", {}).get("name")
             suffix = f" (assist: {assist})" if assist else ""
-            lines.append(f"- **{minute}'** — {team}: {detail}; {player}{suffix}")
+            lines.append(
+                f"- **{minute}'** — {team}: {detail}; {player}{suffix}"
+            )
     else:
         lines.append("No event timeline was returned by the provider.")
+
     lines += ["", "## Team statistics"]
+
     if stats:
         for team_stats in stats:
             team_name = team_stats.get("team", {}).get("name", "Unknown team")
             lines.append(f"### {team_name}")
+
             for stat in team_stats.get("statistics", []):
-                lines.append(f"- {stat.get('type', 'Statistic')}: {stat.get('value', 'Unavailable')}")
+                lines.append(
+                    f"- {stat.get('type', 'Statistic')}: "
+                    f"{stat.get('value', 'Unavailable')}"
+                )
     else:
         lines.append("No team statistics were returned.")
+
     lines += ["", "## Starting lineups"]
+
     if lineups:
         for lineup in lineups:
             team_name = lineup.get("team", {}).get("name", "Unknown team")
             formation = lineup.get("formation") or "Formation unavailable"
             lines.append(f"### {team_name} — {formation}")
+
             starters = lineup.get("startXI", [])
-            names = [x.get("player", {}).get("name", "Unknown") for x in starters]
-            lines.append(", ".join(names) if names else "Starting XI unavailable.")
+            names = [
+                x.get("player", {}).get("name", "Unknown")
+                for x in starters
+            ]
+
+            lines.append(
+                ", ".join(names) if names else "Starting XI unavailable."
+            )
     else:
-        lines.append("No lineup data was returned.")
+        lines.append(
+            "Lineup information is unavailable. "
+            "The report was generated without it."
+        )
+
     lines += ["", "## Prediction review"]
+
     if pre_predictions:
-        actual = "home win" if (goals.get("home") or 0) > (goals.get("away") or 0) else "away win" if (goals.get("home") or 0) < (goals.get("away") or 0) else "draw"
-        chosen = max(("home win", "draw", "away win"), key=lambda k: pre_predictions[{"home win":"home_win","draw":"draw","away win":"away_win"}[k]])
+        home_goals = goals.get("home") or 0
+        away_goals = goals.get("away") or 0
+
+        actual = (
+            "home win" if home_goals > away_goals
+            else "away win" if home_goals < away_goals
+            else "draw"
+        )
+
+        probability_keys = {
+            "home win": "home_win",
+            "draw": "draw",
+            "away win": "away_win",
+        }
+
+        chosen = max(
+            probability_keys,
+            key=lambda k: pre_predictions[probability_keys[k]]
+        )
+
         lines += [
             f"- Highest pre-match probability: **{chosen}**",
             f"- Actual outcome: **{actual}**",
@@ -173,13 +218,18 @@ def make_post_report(api, fixture, cfg, pre_predictions=None):
             "- A single match is not enough to assess model quality; evaluate calibration over a large sample.",
         ]
     else:
-        lines.append("No saved pre-match probability was available for this run.")
+        lines.append(
+            "No saved pre-match probability was available for this run."
+        )
+
     lines += [
         "",
         "## Performance notes",
         "- Player ratings and official xG are not synthesized when the provider does not return them.",
         "- Interpret possession and shot volume in context; they do not alone establish performance superiority.",
+        "- Some information may be missing because of API availability or plan restrictions.",
         "",
         f"_Generated automatically at {datetime.now(timezone.utc).isoformat()}._",
     ]
+
     return "\n".join(lines)
