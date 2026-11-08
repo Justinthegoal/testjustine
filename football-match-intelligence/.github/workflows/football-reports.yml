@@ -1,0 +1,53 @@
+
+name: Football reports
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Type de rapport"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - both
+          - pre
+          - post
+      force:
+        description: "Forcer la génération"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  generate-reports:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Télécharger le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt
+
+      - name: Générer les rapports
+        env:
+          APISPORTS_KEY: ${{ secrets.APISPORTS_KEY }}
+          MODE: ${{ inputs.mode || 'both' }}
+          FORCE: ${{ inputs.force || 'false' }}
+        run: python -m src.main
+
+      - name: Enregistrer les rapports dans GitHub
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Mise à jour des rapports de football"
