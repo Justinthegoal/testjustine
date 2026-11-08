@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import re
 from .analysis import form_summary, match_probabilities, pct
+from .api_football import APIFootballError
 
 def slug(text):
     return re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-")
@@ -20,6 +21,13 @@ def fmt(value, suffix=""):
 def fixture_parts(f):
     teams, league = f.get("teams", {}), f.get("league", {})
     return teams.get("home", {}), teams.get("away", {}), league
+
+def optional_api_data(api, method, fixture_id, label):
+    try:
+        return getattr(api, method)(fixture_id)
+    except APIFootballError as exc:
+        print(f"WARNING: Could not retrieve {label} for fixture {fixture_id}: {exc}")
+        return []
 
 def make_pre_report(api, fixture, cfg):
     fid = fixture["fixture"]["id"]
