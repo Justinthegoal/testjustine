@@ -25,8 +25,27 @@ def fixture_parts(f):
 def optional_api_data(api, method, fixture_id, label):
     try:
         return getattr(api, method)(fixture_id)
+
     except APIFootballError as exc:
-        print(f"WARNING: Could not retrieve {label} for fixture {fixture_id}: {exc}")
+        message = str(exc).lower()
+
+        quota_errors = (
+            "request limit for the day",
+            "reached the request limit",
+            "daily request limit",
+            "daily api quota exhausted",
+            "quota exhausted",
+        )
+
+        # A daily quota error must stop the entire process.
+        if any(error in message for error in quota_errors):
+            raise
+
+        # Other unavailable optional data should not block the report.
+        print(
+            f"WARNING: Could not retrieve {label} "
+            f"for fixture {fixture_id}: {exc}"
+        )
         return []
 
 def make_pre_report(api, fixture, cfg):
