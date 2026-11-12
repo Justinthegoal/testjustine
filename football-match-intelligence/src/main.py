@@ -54,16 +54,16 @@ def load_saved_prediction(pre_path):
 
     return None
 
-
 def quota_exhausted(error):
     message = str(error).lower()
 
-    return (
-        "request limit for the day" in message
-        or "reached the request limit" in message
-        or "daily request limit" in message
-    )
-
+    return any(term in message for term in (
+        "request limit for the day",
+        "reached the request limit",
+        "daily request limit",
+        "daily api quota exhausted",
+        "quota exhausted",
+    ))
 
 def main():
     load_dotenv()
