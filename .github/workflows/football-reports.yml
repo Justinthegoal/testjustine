@@ -4,6 +4,7 @@ name: Football reports
 on:
   schedule:
     - cron: "7,37 * * * *"
+
   workflow_dispatch:
     inputs:
       mode:
@@ -38,16 +39,26 @@ jobs:
           python-version: "3.11"
 
       - name: Installer les dépendances
-        working-directory: football-match-intelligence
+        working-directory: ./football-match-intelligence
         run: pip install -r requirements.txt
 
       - name: Générer les rapports
-        working-directory: football-match-intelligence
+        working-directory: ./football-match-intelligence
         env:
           APISPORTS_KEY: ${{ secrets.APISPORTS_KEY }}
           MODE: ${{ inputs.mode || 'both' }}
           FORCE: ${{ inputs.force || 'false' }}
         run: python -m src.main
+
+      - name: Copier les rapports vers le site
+        run: |
+          mkdir -p docs/reports
+          if [ -d football-match-intelligence/reports ]; then
+            cp -a football-match-intelligence/reports/. docs/reports/
+            echo "Rapports copiés vers docs/reports."
+          else
+            echo "Aucun rapport disponible pour le moment."
+          fi
 
       - name: Enregistrer les rapports dans GitHub
         uses: stefanzweifel/git-auto-commit-action@v5
